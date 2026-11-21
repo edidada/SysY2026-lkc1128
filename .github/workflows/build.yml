@@ -1,0 +1,42 @@
+# CI for LKC1128/Compiler (SysY2026 -> ARMv8-A). Pure C++17, no external deps.
+# Local build skipped; the contest baseline compiler is clang++-18.
+name: build (SysY2026 lkc1128)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: install deps
+      run: |
+        sudo apt update
+        sudo apt install -y clang-18 llvm-18-dev lld \
+          gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
+
+    - name: Build via contest script
+      run: |
+        make all
+
+    - name: unit regressions (ctest)
+      continue-on-error: true
+      run: |
+        cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+        cmake --build build-cmake -j4
+        cd build-cmake && ctest --output-on-failure
+
+    - name: smoke test (compiler runs)
+      run: |
+        cat > /tmp/smoke.sy <<'EOF'
+        int main() { return 0; }
+        EOF
+        ./compiler /tmp/smoke.sy -S -o /tmp/smoke.s
+        test -s /tmp/smoke.s
+        echo "--- generated asm ---"
+        head -20 /tmp/smoke.s
